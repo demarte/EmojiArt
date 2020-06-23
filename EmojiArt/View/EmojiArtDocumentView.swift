@@ -46,8 +46,8 @@ struct EmojiArtDocumentView: View {
               .font(animatableWithSize: emoji.fontSize * self.zoomScale)
               .position(self.position(for: emoji, in: geometry.size))
               .opacity(self.selectedEmojis.contains(matching: emoji) ? 0.5 : 1)
-              .offset(self.selectedEmojis.contains(matching: emoji) ? self.gestureEmojiPanOffset : .zero)
-              .gesture(self.panEmojiGesture())
+              .offset(self.offset(for: emoji, in: geometry.size))
+              .gesture(self.panEmojiGesture(in: geometry.size))
               .onTapGesture {
                 self.selectedEmojis.toggle(matching: emoji)
             }
@@ -128,17 +128,43 @@ struct EmojiArtDocumentView: View {
   // MARK: - Emoji Pan -
   
   @GestureState private var gestureEmojiPanOffset: CGSize = .zero
+  @GestureState private var dragLocation: CGPoint = .zero
   
-  private func panEmojiGesture() -> some Gesture {
+  private func panEmojiGesture(in size: CGSize) -> some Gesture {
     DragGesture()
+      .updating($dragLocation) { latestDragGestureValue, dragLocation, transaction in
+        dragLocation = latestDragGestureValue.startLocation
+      }
       .updating($gestureEmojiPanOffset) { latestDragGestureValue, gestureEmojiPanOffset, transaction in
         gestureEmojiPanOffset = latestDragGestureValue.translation
     }
       .onEnded { finalDragGestureValue in
         self.selectedEmojis.forEach { self.document.moveEmoji($0, by: finalDragGestureValue.translation / self.zoomScale) }
-        self.selectedEmojis.removeAll()
+        for emoji in self.document.emojis {
+          if self.isDragging(emoji: emoji, in: size, dragStartPosition: finalDragGestureValue.startLocation) {
+            self.document.moveEmoji(emoji, by: finalDragGestureValue.translation / self.zoomScale)
+          }
+        }
     }
   }
+  
+  private func offset(for emoji: EmojiArt.Emoji, in size: CGSize) -> CGSize {
+    if selectedEmojis.contains(matching: emoji) || isDragging(emoji: emoji, in: size, dragStartPosition: dragLocation) {
+      return gestureEmojiPanOffset
+    } else {
+      return .zero
+    }
+  }
+  
+  private func isDragging(emoji: EmojiArt.Emoji, in size: CGSize, dragStartPosition: CGPoint) -> Bool {
+    var emojiPosition = position(for: emoji, in: size)
+    emojiPosition = CGPoint(x: emojiPosition.x - CGFloat(emoji.size/2), y: emojiPosition.y - CGFloat(emoji.size/2))
+    let emojiRect = CGRect(origin: emojiPosition, size: CGSize(width: emoji.size, height: emoji.size))
+    
+    return emojiRect.contains(dragStartPosition)
+  }
+  
+  // MARK: - Tap Gesture -
   
   private func tapGesture(in size: CGSize) -> some Gesture {
     TapGesture(count: 2)
