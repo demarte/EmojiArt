@@ -54,7 +54,7 @@ struct EmojiArtDocumentView: View {
           else {
             ForEach(self.document.emojis) { emoji in
               Text(emoji.text)
-                .font(animatableWithSize: emoji.fontSize * self.zoomScale)
+                .font(animatableWithSize: self.size(for: emoji))
                 .position(self.position(for: emoji, in: geometry.size))
                 .opacity(self.selectedEmojis.contains(matching: emoji) ? 0.5 : 1)
                 .offset(self.offset(for: emoji, in: geometry.size))
@@ -103,10 +103,10 @@ struct EmojiArtDocumentView: View {
         gestureZoomScale = latestGestureScale
     }
     .onEnded { finalGestureScale in
-      if !self.selectedEmojis.isEmpty {
-        self.selectedEmojis.forEach { self.document.scaleEmoji($0, by: finalGestureScale) }
-      } else {
+      if self.selectedEmojis.isEmpty {
         self.steadyStateZoomScale *= finalGestureScale
+      } else {
+        self.selectedEmojis.forEach { self.document.scaleEmoji($0, by: finalGestureScale) }
       }
     }
   }
@@ -116,6 +116,14 @@ struct EmojiArtDocumentView: View {
       return zoomScale
     } else {
       return steadyStateZoomScale
+    }
+  }
+
+  private func size(for emoji: EmojiArt.Emoji) -> CGFloat {
+    if selectedEmojis.isEmpty || selectedEmojis.contains(matching: emoji) {
+      return emoji.fontSize * zoomScale
+    } else {
+      return emoji.fontSize * steadyStateZoomScale
     }
   }
   
