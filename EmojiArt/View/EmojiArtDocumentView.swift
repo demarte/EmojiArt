@@ -13,18 +13,25 @@ struct EmojiArtDocumentView: View {
   @ObservedObject var document: EmojiArtDocument
   
   @State private var selectedEmojis: Set<EmojiArt.Emoji> = []
+  @State private var choosePalette: String = ""
   
   var body: some View {
     VStack {
-      ScrollView(.horizontal) {
-        HStack {
-          ForEach(EmojiArtDocument.palette.map { String($0) }, id: \.self) { emoji in
-            Text("\(emoji)")
-              .font(Font.system(size: self.defaultEmojiSize))
-              .onDrag { NSItemProvider(object: emoji as NSString) }
+      HStack {
+        PaletteChooser(document: self.document, choosePalette: $choosePalette)
+        ScrollView(.horizontal) {
+          HStack {
+            ForEach(choosePalette.map { String($0) }, id: \.self) { emoji in
+              Text("\(emoji)")
+                .font(Font.system(size: self.defaultEmojiSize))
+                .onDrag { NSItemProvider(object: emoji as NSString) }
+            }
           }
+          .padding(.horizontal)
         }
-        .padding(.horizontal)
+      }
+      .onAppear {
+        self.choosePalette = self.document.defaultPalette
       }
       Button(action: {
         self.selectedEmojis.forEach { self.document.removeEmoji($0) }
@@ -41,21 +48,29 @@ struct EmojiArtDocumentView: View {
               .offset(self.panOffset)
           )
             .gesture(self.tapGesture(in: geometry.size))
-          ForEach(self.document.emojis) { emoji in
-            Text(emoji.text)
-              .font(animatableWithSize: emoji.fontSize * self.zoomScale)
-              .position(self.position(for: emoji, in: geometry.size))
-              .opacity(self.selectedEmojis.contains(matching: emoji) ? 0.5 : 1)
-              .offset(self.offset(for: emoji, in: geometry.size))
-              .gesture(self.panEmojiGesture(in: geometry.size))
-              .onTapGesture {
-                self.selectedEmojis.toggle(matching: emoji)
+          if self.isLoading {
+            Image(systemName: "hourglass").imageScale(.large).spinning()
+          }
+          else {
+            ForEach(self.document.emojis) { emoji in
+              Text(emoji.text)
+                .font(animatableWithSize: emoji.fontSize * self.zoomScale)
+                .position(self.position(for: emoji, in: geometry.size))
+                .opacity(self.selectedEmojis.contains(matching: emoji) ? 0.5 : 1)
+                .offset(self.offset(for: emoji, in: geometry.size))
+                .gesture(self.panEmojiGesture(in: geometry.size))
+                .onTapGesture {
+                  self.selectedEmojis.toggle(matching: emoji)
+              }
             }
           }
         }
         .clipped()
         .gesture(self.combinedGestures())
         .edgesIgnoringSafeArea([.bottom, .horizontal])
+        .onReceive(self.document.$backgroundImage) { image in
+          self.zoomToFit(image, in: geometry.size)
+        }
         .onDrop(of: ["public.image", "public.text"], isTargeted: nil) { providers, location in
           // SwiftUI bug (as of 13.4)? the location is supposed to be in our coordinate system
           // however, the y coordinate appears to be in the global coordinate system
@@ -67,6 +82,10 @@ struct EmojiArtDocumentView: View {
         }
       }
     }
+  }
+
+  var isLoading: Bool {
+    document.backgroundURL != nil && document.backgroundImage == nil
   }
   
   // MARK: - Background Image Zoom -
@@ -122,8 +141,8 @@ struct EmojiArtDocumentView: View {
   // MARK: - Combine Pan and Zoom -
   
   private func combinedGestures() -> some Gesture {
-     panGesture().simultaneously(with: zoomGesture())
-   }
+    panGesture().simultaneously(with: zoomGesture())
+  }
   
   // MARK: - Emoji Pan -
   
@@ -134,17 +153,17 @@ struct EmojiArtDocumentView: View {
     DragGesture()
       .updating($dragLocation) { latestDragGestureValue, dragLocation, transaction in
         dragLocation = latestDragGestureValue.startLocation
-      }
-      .updating($gestureEmojiPanOffset) { latestDragGestureValue, gestureEmojiPanOffset, transaction in
-        gestureEmojiPanOffset = latestDragGestureValue.translation
     }
-      .onEnded { finalDragGestureValue in
-        self.selectedEmojis.forEach { self.document.moveEmoji($0, by: finalDragGestureValue.translation / self.zoomScale) }
-        for emoji in self.document.emojis {
-          if self.isDragging(emoji: emoji, in: size, dragStartPosition: finalDragGestureValue.startLocation) {
-            self.document.moveEmoji(emoji, by: finalDragGestureValue.translation / self.zoomScale)
-          }
+    .updating($gestureEmojiPanOffset) { latestDragGestureValue, gestureEmojiPanOffset, transaction in
+      gestureEmojiPanOffset = latestDragGestureValue.translation
+    }
+    .onEnded { finalDragGestureValue in
+      self.selectedEmojis.forEach { self.document.moveEmoji($0, by: finalDragGestureValue.translation / self.zoomScale) }
+      for emoji in self.document.emojis {
+        if self.isDragging(emoji: emoji, in: size, dragStartPosition: finalDragGestureValue.startLocation) {
+          self.document.moveEmoji(emoji, by: finalDragGestureValue.translation / self.zoomScale)
         }
+      }
     }
   }
   
@@ -201,7 +220,7 @@ struct EmojiArtDocumentView: View {
   
   private func drop(providers: [NSItemProvider], at location: CGPoint) -> Bool {
     var found = providers.loadFirstObject(ofType: URL.self) { url in
-      self.document.setBackgroundURL(url)
+      self.document.backgroundURL = url
     }
     
     if !found {
