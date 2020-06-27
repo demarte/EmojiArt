@@ -12,16 +12,26 @@ struct PaletteChooser: View {
 
   @ObservedObject var document: EmojiArtDocument
 
-  @Binding var choosePalette: String
+  @Binding var chosenPalette: String
+  @State private var showPaletteEditor = false
 
   var body: some View {
     HStack {
       Stepper(onIncrement: {
-        self.choosePalette = self.document.palette(after: self.choosePalette)
+        self.chosenPalette = self.document.palette(after: self.chosenPalette)
       }, onDecrement: {
-        self.choosePalette = self.document.palette(before: self.choosePalette)
+        self.chosenPalette = self.document.palette(before: self.chosenPalette)
       }, label: { EmptyView() })
-      Text(self.document.paletteNames[self.choosePalette] ?? "")
+      Text(self.document.paletteNames[self.chosenPalette] ?? "")
+      Image(systemName: "keyboard").imageScale(.large)
+      .onTapGesture {
+          self.showPaletteEditor = true
+      }
+      .popover(isPresented: $showPaletteEditor) {
+          PaletteEditor(chosenPalette: self.$chosenPalette, isShowing: self.$showPaletteEditor)
+              .environmentObject(self.document)
+              .frame(minWidth: 300, minHeight: 500)
+      }
     }
     .fixedSize(horizontal: true, vertical: true)
   }
@@ -29,6 +39,6 @@ struct PaletteChooser: View {
 
 struct PaletteChooser_Previews: PreviewProvider {
   static var previews: some View {
-    PaletteChooser(document: EmojiArtDocument(), choosePalette: .constant(""))
+    PaletteChooser(document: EmojiArtDocument(), chosenPalette: .constant(""))
   }
 }

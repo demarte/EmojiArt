@@ -10,16 +10,20 @@ import SwiftUI
 import Combine
 
 final class EmojiArtDocument: ObservableObject {
-  
+
+  let id: UUID
+  var emojis: [EmojiArt.Emoji] { emojiArt.emojis }
+
   @Published private var emojiArt: EmojiArt
   @Published private(set) var backgroundImage: UIImage?
+  @Published var steadyStateZoomScale: CGFloat = 1.0
+
   private var autosaveCancellable: AnyCancellable?
-  
-  var emojis: [EmojiArt.Emoji] { emojiArt.emojis }
-  
+
   private static let untitled = "EmojiArtDocument.Untitled"
-  
-  init() {
+
+  init(id: UUID? = nil) {
+    self.id = id ?? UUID()
     emojiArt = EmojiArt(json: UserDefaults.standard.data(forKey: EmojiArtDocument.untitled)) ?? EmojiArt()
     autosaveCancellable = $emojiArt.sink { emojiArt in
       UserDefaults.standard.set(emojiArt.json, forKey: EmojiArtDocument.untitled)
@@ -77,7 +81,18 @@ final class EmojiArtDocument: ObservableObject {
   }
 }
 
-// MARK: - Model extension -
+extension EmojiArtDocument: Hashable, Identifiable {
+
+  static func == (lhs: EmojiArtDocument, rhs: EmojiArtDocument) -> Bool {
+    lhs.id == rhs.id
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine(id)
+  }
+}
+
+// MARK: - Model Emoji Art extension -
 
 extension EmojiArt.Emoji {
   var fontSize: CGFloat { CGFloat(self.size) }
